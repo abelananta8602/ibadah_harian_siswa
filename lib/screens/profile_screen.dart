@@ -1,9 +1,10 @@
 import 'dart:typed_data';
 import 'dart:convert';
-import 'dart:ui';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,12 +18,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int jumlahHariPenuh = 0;
   String username = 'Nama Pengguna';
   Uint8List? _profileImage;
+  List<String> badges = [];
+  bool _subuhTodayChecked = false;
 
   @override
   void initState() {
     super.initState();
     loadProfile();
-    hitungStatistik();
+    _refreshStatsAndBadges();
+  }
+
+  Future<void> _refreshStatsAndBadges() async {
+    await hitungStatistik();
+    periksaBadge();
   }
 
   Future<void> loadProfile() async {
@@ -38,50 +46,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> hitungStatistik() async {
     final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getKeys();
+    final String? allRiwayatJson = prefs.getString('riwayat_ibadah');
 
-    int subuhTepat = 0;
-    Set<String> tanggalSet = {};
-    Map<String, List<String>> dataHarian = {};
-
-    for (String key in keys) {
-      final value = prefs.getString(key);
-      if (value == null) continue;
-
-      if (key.startsWith('subuh_')) {
-        final waktu = DateTime.tryParse(value);
-        if (waktu != null && waktu.hour >= 4 && waktu.hour < 5) {
-          subuhTepat++;
-        }
-      }
-
-      final parts = key.split('_');
-      if (parts.length == 2) {
-        final waktuIbadah = parts[0];
-        final tanggal = parts[1];
-
-        dataHarian[tanggal] = dataHarian[tanggal] ?? [];
-        dataHarian[tanggal]!.add(waktuIbadah);
-        tanggalSet.add(tanggal);
-      }
+    List<Map<String, dynamic>> riwayatList = [];
+    if (allRiwayatJson != null) {
+      riwayatList = (json.decode(allRiwayatJson) as List)
+          .cast<Map<String, dynamic>>();
     }
 
-    int hariPenuh =
-        dataHarian.values
-            .where(
-              (list) => list.toSet().containsAll([
-                'subuh',
-                'dzuhur',
-                'ashar',
-                'maghrib',
-                'isya',
-              ]),
-            )
-            .length;
+    int subuhTepat = 0;
+    int hariPenuh = 0;
+    bool subuhHariIni = false;
+
+    final todayFormatted = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+    for (var item in riwayatList) {
+      final String? tanggal = item['tanggal'];
+      if (tanggal == null) continue;
+
+      final isSubuhChecked = item['Subuh'] as bool? ?? false;
+      final isDzuhurChecked = item['Dzuhur'] as bool? ?? false;
+      final isAsharChecked = item['Ashar'] as bool? ?? false;
+      final isMaghribChecked = item['Maghrib'] as bool? ?? false;
+      final isIsyaChecked = item['Isya'] as bool? ?? false;
+
+      final isSubuhTepatWaktuSaved = item['isSubuhTepatWaktu'] as bool? ?? false;
+      if (isSubuhChecked && isSubuhTepatWaktuSaved) {
+        subuhTepat++;
+      }
+      if (tanggal == todayFormatted) {
+        if (isSubuhChecked) {
+          subuhHariIni = true;
+        }
+      }
+      final semuaShalatDicentang = [
+        isSubuhChecked,
+        isDzuhurChecked,
+        isAsharChecked,
+        isMaghribChecked,
+        isIsyaChecked,
+      ];
+
+      if (semuaShalatDicentang.every((s) => s == true)) {
+        hariPenuh++;
+      }
+    }
 
     setState(() {
       jumlahSubuhTepatWaktu = subuhTepat;
       jumlahHariPenuh = hariPenuh;
+      _subuhTodayChecked = subuhHariIni;
     });
   }
 
@@ -92,38 +106,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       backgroundColor: const Color(0xFFF9F4FF),
-      builder:
-          (context) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    'Pilih Foto Profil',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(
-                    Icons.camera_alt,
-                    color: Colors.deepPurple,
-                  ),
-                  title: const Text('Kamera'),
-                  onTap: () => Navigator.pop(context, ImageSource.camera),
-                ),
-                ListTile(
-                  leading: const Icon(
-                    Icons.photo_library,
-                    color: Colors.deepPurple,
-                  ),
-                  title: const Text('Galeri'),
-                  onTap: () => Navigator.pop(context, ImageSource.gallery),
-                ),
-                const SizedBox(height: 12),
-              ],
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                'Pilih Foto Profil',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
             ),
-          ),
+            ListTile(
+              leading: const Icon(
+                Icons.camera_alt,
+                color: Colors.deepPurple,
+              ),
+              title: const Text('Kamera'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.photo_library,
+                color: Colors.deepPurple,
+              ),
+              title: const Text('Galeri'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
     );
 
     if (source != null) {
@@ -137,6 +150,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
     }
+  }
+
+  void periksaBadge() {
+    List<String> tempBadges = [];
+
+    if (jumlahSubuhTepatWaktu >= 5) {
+      tempBadges.add('🌅 Subuh Hero');
+    }
+
+    if (jumlahHariPenuh >= 5) {
+      tempBadges.add('🔁 Konsisten Harian');
+    }
+
+    if (jumlahHariPenuh >= 10) {
+      tempBadges.add('🕌 Ahli Ibadah');
+    }
+
+    setState(() {
+      badges = tempBadges;
+    });
   }
 
   Future<void> tampilkanDialogUbahNama(BuildContext context) async {
@@ -154,7 +187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       pageBuilder: (_, __, ___) => const SizedBox.shrink(),
       transitionBuilder: (context, animation, _, child) {
         return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          filter: ui.ImageFilter.blur(sigmaX: 5, sigmaY: 5),
           child: FadeTransition(
             opacity: animation,
             child: ScaleTransition(
@@ -287,17 +320,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     radius: 48,
                     backgroundColor: const Color(0xFFE0D7F8),
                     backgroundImage:
-                        _profileImage != null
-                            ? MemoryImage(_profileImage!)
-                            : null,
-                    child:
-                        _profileImage == null
-                            ? const Icon(
-                              Icons.person,
-                              size: 48,
-                              color: Colors.deepPurple,
-                            )
-                            : null,
+                        _profileImage != null ? MemoryImage(_profileImage!) : null,
+                    child: _profileImage == null
+                        ? const Icon(
+                            Icons.person,
+                            size: 48,
+                            color: Colors.deepPurple,
+                          )
+                        : null,
                   ),
                   Positioned(
                     bottom: 0,
@@ -336,7 +366,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _StatCard(
                     icon: Icons.alarm_on,
                     label: 'Subuh Tepat Waktu',
-                    value: '$jumlahSubuhTepatWaktu hari',
+                    value: '$_subuhTodayChecked' == 'true' ? 'Selesai!' : '$jumlahSubuhTepatWaktu hari',
+                    isSubuhCard: true,
+                    subuhTodayChecked: _subuhTodayChecked,
                   ),
                   _StatCard(
                     icon: Icons.calendar_today,
@@ -345,6 +377,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 24),
+              if (badges.isNotEmpty) ...[
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Badge Prestasi:',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: badges.map((badge) {
+                    return Chip(
+                      label: Text(
+                        badge,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      backgroundColor: Colors.deepPurple[50],
+                      avatar: const Icon(
+                        Icons.emoji_events,
+                        color: Colors.deepPurple,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
               const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: () => tampilkanDialogUbahNama(context),
@@ -365,13 +428,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ElevatedButton(
                 onPressed: () async {
                   final prefs = await SharedPreferences.getInstance();
-                  await prefs.clear();
+                  await prefs.remove('riwayat_ibadah');
+                  final oldKeysToDelete = prefs.getKeys().where((k) => k.startsWith('checklist_')).toList();
+                  for (var key in oldKeysToDelete) {
+                    await prefs.remove(key);
+                  }
+
+                  await prefs.remove('username');
+                  await prefs.remove('profileImage');
+
                   setState(() {
                     jumlahSubuhTepatWaktu = 0;
                     jumlahHariPenuh = 0;
                     username = 'Nama Pengguna';
                     _profileImage = null;
+                    _subuhTodayChecked = false;
+                    badges = [];
                   });
+
+                  await _refreshStatsAndBadges();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.redAccent,
@@ -384,7 +459,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                 ),
-                child: const Text('Reset Data'),
+                child: const Text('Reset Data Ibadah & Profil'),
               ),
             ],
           ),
@@ -398,21 +473,43 @@ class _StatCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final bool isSubuhCard;
+  final bool subuhTodayChecked;
 
   const _StatCard({
     required this.icon,
     required this.label,
     required this.value,
+    this.isSubuhCard = false,
+    this.subuhTodayChecked = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    IconData displayIcon = icon;
+    String displayLabel = label;
+    String displayValue = value;
+
+    Color iconColor = Colors.deepPurple;
+    Color cardColorStart = Colors.deepPurple[100]!;
+    Color cardColorEnd = Colors.deepPurple[200]!;
+
+    if (isSubuhCard) {
+      if (subuhTodayChecked) {
+        displayValue = 'Selesai!';
+        displayLabel = 'Subuh Hari Ini';
+        displayIcon = Icons.check_circle;
+        iconColor = Colors.green;
+        cardColorStart = Colors.green[100]!;
+        cardColorEnd = Colors.green[200]!;
+      } else {}}
+
     return Container(
       width: 140,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.deepPurple[100]!, Colors.deepPurple[200]!],
+          colors: [cardColorStart, cardColorEnd],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -429,11 +526,11 @@ class _StatCard extends StatelessWidget {
         children: [
           CircleAvatar(
             backgroundColor: Colors.white,
-            child: Icon(icon, color: Colors.deepPurple),
+            child: Icon(displayIcon, color: iconColor),
           ),
           const SizedBox(height: 12),
           Text(
-            value,
+            displayValue,
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -442,7 +539,7 @@ class _StatCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            label,
+            displayLabel,
             style: const TextStyle(fontSize: 14, color: Colors.white),
             textAlign: TextAlign.center,
           ),
