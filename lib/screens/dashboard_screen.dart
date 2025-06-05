@@ -11,9 +11,10 @@ class DashboardScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F0FA),
       appBar: AppBar(
+        // Tambahkan properti ini untuk menghilangkan panah kembali
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: const Icon(Icons.menu, color: Colors.black87),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
@@ -35,6 +36,7 @@ class DashboardScreen extends StatelessWidget {
           ),
         ],
       ),
+
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24.0),
         child: Column(
@@ -51,7 +53,6 @@ class DashboardScreen extends StatelessWidget {
             ),
             const SizedBox(height: 32),
 
-           
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -79,7 +80,6 @@ class DashboardScreen extends StatelessWidget {
 
             const SizedBox(height: 16),
 
-           
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(

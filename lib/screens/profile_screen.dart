@@ -502,7 +502,8 @@ class _StatCard extends StatelessWidget {
         iconColor = Colors.green;
         cardColorStart = Colors.green[100]!;
         cardColorEnd = Colors.green[200]!;
-      } else {}}
+      } else {}
+}
 
     return Container(
       width: 140,
