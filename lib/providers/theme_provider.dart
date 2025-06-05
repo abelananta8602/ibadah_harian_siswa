@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ThemeProvider with ChangeNotifier {
-  ThemeMode _themeMode = ThemeMode.system; // Default ke tema sistem
+  ThemeMode _themeMode = ThemeMode.system;
 
   ThemeMode get themeMode => _themeMode;
 
@@ -15,7 +15,7 @@ class ThemeProvider with ChangeNotifier {
     final int? themeIndex = prefs.getInt('theme_mode');
     if (themeIndex != null) {
       _themeMode = ThemeMode.values[themeIndex];
-      notifyListeners(); // Beritahu listener bahwa tema telah dimuat
+      notifyListeners();
     }
   }
 
@@ -26,7 +26,7 @@ class ThemeProvider with ChangeNotifier {
     } else {
       _themeMode = ThemeMode.light;
     }
-    await prefs.setInt('theme_mode', _themeMode.index); // Simpan index tema
-    notifyListeners(); // Beritahu semua widget yang mendengarkan perubahan tema
+    await prefs.setInt('theme_mode', _themeMode.index);
+    notifyListeners();
   }
 }

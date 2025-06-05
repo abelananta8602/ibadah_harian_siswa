@@ -11,7 +11,6 @@ class DashboardScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F0FA),
       appBar: AppBar(
-        // Tambahkan properti ini untuk menghilangkan panah kembali
         automaticallyImplyLeading: false,
         backgroundColor: Colors.transparent,
         elevation: 0,
