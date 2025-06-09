@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1082685091643",
+    "project_id": "ibadah-harian-siswa",
+    "storage_bucket": "ibadah-harian-siswa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1082685091643:android:5b388b23ba8ed80e07911e",
+        "android_client_info": {
+          "package_name": "com.example.ibadah_harian_siswa"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDeQ3jQIlUnDnQf4TVgk8CKnz-McVqMG_E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

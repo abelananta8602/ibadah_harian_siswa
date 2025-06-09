@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:intl/intl.dart';
@@ -12,6 +13,7 @@ class CheckIbadahScreen extends StatefulWidget {
 }
 
 class _CheckIbadahScreenState extends State<CheckIbadahScreen> {
+
   Map<String, bool> checklist = {
     'Subuh': false,
     'Dzuhur': false,
@@ -29,99 +31,119 @@ class _CheckIbadahScreenState extends State<CheckIbadahScreen> {
     'Isya': ['19:00', '04:00'],
   };
 
+  User? _currentUser;
+
   @override
   void initState() {
     super.initState();
+    _currentUser = FirebaseAuth.instance.currentUser;
+    if (_currentUser == null) {
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.of(context).pushReplacementNamed('/login');
+      });
+      return;
+    }
     _loadChecklistForToday();
   }
+
 
   void _updateUI() {
     _loadChecklistForToday();
   }
 
+
   Future<void> _loadChecklistForToday() async {
-    final prefs = await SharedPreferences.getInstance();
+    if (_currentUser == null) return;
+
     final todayFormatted = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final String? allRiwayatJson = prefs.getString('riwayat_ibadah');
+    
+    try {
+      DocumentSnapshot doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUser!.uid)
+          .collection('checklists')
+          .doc(todayFormatted)
+          .get();
 
-    List<Map<String, dynamic>> allRiwayat = [];
-    if (allRiwayatJson != null) {
-      allRiwayat = (json.decode(allRiwayatJson) as List)
-          .cast<Map<String, dynamic>>();
-    }
+      setState(() {
+        if (doc.exists && doc.data() != null) {
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+          checklist.forEach((key, value) {
+            checklist[key] = data[key] ?? false;
+          });
+          _isSubuhTepatWaktuCurrent = data['isSubuhTepatWaktu'] ?? false;
+        } else {
 
-    Map<String, dynamic>? dataHariIni;
-    for (var item in allRiwayat) {
-      if (item['tanggal'] == todayFormatted) {
-        dataHariIni = item;
-        break;
+          checklist.updateAll((key, value) => false);
+          _isSubuhTepatWaktuCurrent = false;
+        }
+      });
+    } catch (e) {
+      print('Error loading checklist: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memuat data checklist: $e')),
+        );
       }
     }
-
-    setState(() {
-      if (dataHariIni != null) {
-        checklist.forEach((key, value) {
-          checklist[key] = dataHariIni![key] ?? false;
-        });
-        _isSubuhTepatWaktuCurrent = dataHariIni!['isSubuhTepatWaktu'] ?? false;
-      } else {
-        checklist.updateAll((key, value) => false);
-        _isSubuhTepatWaktuCurrent = false;
-      }
-    });
   }
+
 
   Future<void> _simpanDataHarian(String namaSholat, bool isTepatWaktu) async {
-    final prefs = await SharedPreferences.getInstance();
+    if (_currentUser == null) return;
+
     final todayFormatted = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final docRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(_currentUser!.uid)
+        .collection('checklists')
+        .doc(todayFormatted);
 
-    String? allRiwayatJson = prefs.getString('riwayat_ibadah');
-    List<Map<String, dynamic>> allRiwayat = [];
-    if (allRiwayatJson != null) {
-      allRiwayat = (json.decode(allRiwayatJson) as List)
-          .cast<Map<String, dynamic>>();
-    }
+    try {
 
-    int? todayIndex;
-    for (int i = 0; i < allRiwayat.length; i++) {
-      if (allRiwayat[i]['tanggal'] == todayFormatted) {
-        todayIndex = i;
-        break;
+      DocumentSnapshot currentDoc = await docRef.get();
+      Map<String, dynamic> dataHariIni = {};
+
+      if (currentDoc.exists && currentDoc.data() != null) {
+        dataHariIni = currentDoc.data() as Map<String, dynamic>;
+      } else {
+
+        dataHariIni = {
+          'tanggal': todayFormatted,
+          'Subuh': false,
+          'Dzuhur': false,
+          'Ashar': false,
+          'Maghrib': false,
+          'Isya': false,
+          'isSubuhTepatWaktu': false,
+          'createdAt': Timestamp.now(),
+        };
+      }
+
+
+      dataHariIni[namaSholat] = true;
+
+
+      if (namaSholat == 'Subuh') {
+        dataHariIni['waktuSubuh'] = DateTime.now().toIso8601String();
+        dataHariIni['isSubuhTepatWaktu'] = isTepatWaktu;
+      }
+      
+      dataHariIni['lastUpdatedAt'] = Timestamp.now();
+
+      await docRef.set(dataHariIni);
+      print('Data checklist untuk $todayFormatted berhasil disimpan di Firestore.');
+    } catch (e) {
+      print('Error saving checklist: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan checklist: $e')),
+        );
       }
     }
-
-    Map<String, dynamic> dataHariIni = {};
-    if (todayIndex != null) {
-      dataHariIni = allRiwayat[todayIndex];
-    } else {
-      dataHariIni = {
-        'tanggal': todayFormatted,
-        'Subuh': false,
-        'Dzuhur': false,
-        'Ashar': false,
-        'Maghrib': false,
-        'Isya': false,
-        'isSubuhTepatWaktu': false,
-      };
-    }
-
-    dataHariIni[namaSholat] = true;
-
-    if (namaSholat == 'Subuh') {
-      dataHariIni['waktuSubuh'] = DateTime.now().toIso8601String();
-      dataHariIni['isSubuhTepatWaktu'] = isTepatWaktu;
-    }
-
-    if (todayIndex != null) {
-      allRiwayat[todayIndex] = dataHariIni;
-    } else {
-      allRiwayat.add(dataHariIni);
-    }
-
-    allRiwayat.sort((a, b) => a['tanggal'].compareTo(b['tanggal']));
-
-    await prefs.setString('riwayat_ibadah', json.encode(allRiwayat));
   }
+
 
   bool isDalamWaktu(String namaSholat) {
     final now = DateTime.now();
@@ -149,50 +171,81 @@ class _CheckIbadahScreenState extends State<CheckIbadahScreen> {
     if (waktuAkhir.isBefore(waktuAwal)) {
       waktuAkhir = waktuAkhir.add(const Duration(days: 1));
     }
-    if (namaSholat == 'Isya' && now.isBefore(waktuAwal) && now.hour < 6) {
-        final yesterdayWaktuAwal = waktuAwal.subtract(const Duration(days: 1));
-        if (now.isAfter(yesterdayWaktuAwal) && now.isBefore(waktuAkhir)) {
-            return true;
-        }
+
+    if (namaSholat == 'Isya') {
+      final isyaStart = DateTime(now.year, now.month, now.day, 19, 0);
+      final nextDaySubuhEnd = DateTime(now.year, now.month, now.day, 4, 0).add(const Duration(days: 1));
+      
+
+      bool isDuringCurrentDayIsya = now.isAfter(isyaStart) && now.isBefore(DateTime(now.year, now.month, now.day, 23, 59, 59, 999));
+
+      bool isDuringNextDayEarlyMorning = now.isAfter(DateTime(now.year, now.month, now.day, 0, 0)) && now.isBefore(nextDaySubuhEnd);
+
+      if (isDuringCurrentDayIsya || isDuringNextDayEarlyMorning) {
+        return true;
+      }
+      return false;
     }
+
     return now.isAfter(waktuAwal) && now.isBefore(waktuAkhir);
   }
 
   Future<void> _checkIbadah(String namaSholat) async {
-    final prefs = await SharedPreferences.getInstance();
     final now = DateTime.now();
     final format = RegExp(r'^(\d+):(\d+)$');
-    final matchAwal = format.firstMatch(waktuIbadah[namaSholat]![0])!;
-    final waktuAwal = DateTime(
-      now.year,
-      now.month,
-      now.day,
-      int.parse(matchAwal.group(1)!),
-      int.parse(matchAwal.group(2)!),
-    );
-    if (now.isBefore(waktuAwal) && !(namaSholat == 'Isya' && now.hour < 6)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Belum waktunya $namaSholat!"))
-        );
-        return;
-    }
-    final onTime = isDalamWaktu(namaSholat);
-    await _simpanDataHarian(namaSholat, onTime);
-    _updateUI(); 
+    
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          onTime
-              ? '$namaSholat berhasil dicheck tepat waktu!'
-              : '$namaSholat dicheck, tapi sudah lewat waktunya.',
+
+    if (namaSholat == 'Isya' && now.hour >= 0 && now.hour < 4) {
+
+    } else {
+      final matchAwal = format.firstMatch(waktuIbadah[namaSholat]![0])!;
+      final waktuAwal = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        int.parse(matchAwal.group(1)!),
+        int.parse(matchAwal.group(2)!),
+      );
+      if (now.isBefore(waktuAwal)) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Belum waktunya $namaSholat!")),
+          );
+        }
+        return;
+      }
+    }
+
+    final onTime = isDalamWaktu(namaSholat);
+    
+
+    await _simpanDataHarian(namaSholat, onTime);
+    _updateUI();
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            onTime
+                ? '$namaSholat berhasil dicheck tepat waktu!'
+                : '$namaSholat dicheck, tapi sudah lewat waktunya.',
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+
+
+    if (_currentUser == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Checklist Ibadah Harian"),
